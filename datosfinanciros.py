@@ -1,145 +1,175 @@
 import streamlit as st
 import pandas as pd
 import yfinance as yf
-import matplotlib.pyplot as plt
+import numpy as np
 
 # Configuración de la página
-st.set_page_config(page_title="Dashboard Financiero México", layout="wide")
+st.set_page_config(page_title="Dashboard Financiero IPC", layout="wide", page_icon="📊")
 
 # Título principal
-st.title("📊 Dashboard Financiero: Empresas Mexicanas")
+st.title("📊 Dashboard Financiero: Empresas del IPC (BMV)")
 
 # Crear las pestañas
 tab1, tab2 = st.tabs(["🏢 Análisis Financiero", "📈 Próximamente..."])
 
 # ==========================================
+# DICCIONARIO DE EMPRESAS DEL IPC (Oficiales)
+# ==========================================
+empresas_ipc = {
+    'Alfa': 'ALFAA.MX',
+    'América Móvil': 'AMXL.MX',
+    'Arca Continental': 'AC.MX',
+    'Banco del Bajío': 'BBAJIO.MX',
+    'Bimbo': 'BIMBOA.MX',
+    'Bolsa Mexicana de Valores': 'BOLSAA.MX',
+    'Cemex': 'CEMEXCPO.MX',
+    'Chedraui': 'CHDRAUIB.MX',
+    'CIE': 'CIEB.MX',
+    'Consorcio Ara': 'ARA.MX',
+    'El Puerto de Liverpool': 'LIVEPOLC1.MX',
+    'FEMSA': 'FEMSAUBD.MX',
+    'Genomma Lab': 'LABB.MX',
+    'Grupo Aeroportuario del Pacífico (GAP)': 'GAPB.MX',
+    'Grupo Aeroportuario del Centro Norte (OMA)': 'OMAB.MX',
+    'Grupo Aeroportuario del Sureste (ASUR)': 'ASURB.MX',
+    'Grupo Carso': 'GCARSOA1.MX',
+    'Grupo Elektra': 'ELEKTRA.MX',
+    'Grupo Financiero Banorte': 'GFNORTEO.MX',
+    'Grupo Financiero Inbursa': 'GFINBURO.MX',
+    'Grupo México': 'GMEXICOB.MX',
+    'Grupo Simec': 'SIMECB.MX',
+    'Gruma': 'GRUMA.MX',
+    'Herdez': 'HERDEZ.MX',
+    'Kimberly-Clark': 'KIMBERA.MX',
+    'La Lala': 'LALA.MX',
+    'Megacable': 'MEGACPO.MX',
+    'Peñoles': 'PEÑOLES.MX',
+    'Pinfra': 'PINFRA.MX',
+    'Rotoplas': 'AGUA.MX',
+    'Soriana': 'SORIANA.MX',
+    'Televisa': 'TLEVISACPO.MX',
+    'Walmex': 'WALMEX.MX'
+}
+
+# Ordenar alfabéticamente para la lista desplegable
+empresas_ipc = dict(sorted(empresas_ipc.items()))
+
+# ==========================================
 # PESTAÑA 1: ANÁLISIS FINANCIERO
 # ==========================================
 with tab1:
-    st.header("Comparativa de Empresas de la BMV")
+    st.header("Comparativa de Empresas del IPC")
     
-    # Diccionario de empresas mexicanas y sus tickers en Yahoo Finance
-    empresas_dict = {
-        'Walmex': 'WALMEX.MX',
-        'América Móvil': 'AMXL.MX',
-        'Grupo Financiero Banorte': 'GFNORTEO.MX',
-        'FEMSA': 'FEMSAUBD.MX',
-        'Cemex': 'CEMEXCPO.MX',
-        'Grupo México': 'GMEXICOB.MX',
-        'Bimbo': 'BIMBOA.MX',
-        'Alfa': 'ALFAA.MX'
-    }
-
-    # Lista desplegable (multiselect) para elegir hasta 5 empresas
+    # Lista desplegable (multiselect)
     empresas_seleccionadas = st.multiselect(
         "Selecciona hasta 5 empresas para analizar:",
-        options=list(empresas_dict.keys()),
+        options=list(empresas_ipc.keys()),
         default=['Walmex', 'América Móvil', 'Grupo Financiero Banorte'],
         max_selections=5
     )
 
     if empresas_seleccionadas:
-        st.subheader("1️⃣ Ingresos e Ingresos Netos (Últimos 3 años)")
-        
-        # Variables para guardar los datos
-        datos_ingresos = {}
-        datos_ratios = {}
-        
-        # Descargar datos de cada empresa
-        for empresa in empresas_seleccionadas:
-            ticker = yf.Ticker(empresas_dict[empresa])
+        with st.spinner('Descargando datos financieros de Yahoo Finance...'):
             
-            try:
-                # Obtener Estado de Resultados (Ingresos) y Balance General
-                financials = ticker.financials
-                balance = ticker.balance_sheet
-                
-                # Tomar los últimos 3 años disponibles (las columnas están ordenadas de más reciente a más antigua)
-                ultimos_3_anios = financials.columns[:3]
-                años_str = [str(col.year) for col in ultimos_3_anios]
-                
-                # Extraer Ingresos Totales y Utilidad Neta
-                ingresos = financials.loc['Total Revenue', ultimos_3_anios].values / 1e9 # En miles de millones
-                neto = financials.loc['Net Income', ultimos_3_anios].values / 1e9
-                
-                datos_ingresos[empresa] = {
-                    'Años': años_str,
-                    'Ingresos Totales (MMD)': ingresos,
-                    'Ingresos Netos (MMD)': neto
-                }
-                
-                # Calcular ROA, ROE y EPS para el año más reciente
-                # ROA = Utilidad Neta / Activos Totales
-                activos = balance.loc['Total Assets', balance.columns[0]]
-                roa = (neto[0] * 1e9) / activos * 100 if activos else 0
-                
-                # ROE = Utilidad Neta / Capital Contable
-                capital = balance.loc['Stockholders Equity', balance.columns[0]]
-                roe = (neto[0] * 1e9) / capital * 100 if capital else 0
-                
-                # EPS (UPA) = Utilidad Neta / Número de Acciones
-                # Usamos el EPS directo de Yahoo Finance si está disponible, si no, lo calculamos
-                info = ticker.info
-                eps = info.get('trailingEps', 0)
-                
-                datos_ratios[empresa] = {
-                    'ROA (%)': round(roa, 2),
-                    'ROE (%)': round(roe, 2),
-                    'EPS / UPA ($)': round(eps, 2)
-                }
-            except Exception as e:
-                st.warning(f"No se pudieron obtener todos los datos de {empresa}. Revisa el ticker.")
+            data_ingresos = {}
+            data_neto = {}
+            data_ratios = {}
+            años_cols = []
 
-        # --- MOSTRAR INGRESOS EN TABLA ---
-        if datos_ingresos:
-            # Crear DataFrame para mostrarlo bonito
-            df_ingresos = []
-            for emp, data in datos_ingresos.items():
-                for i in range(3):
-                    df_ingresos.append({
-                        'Empresa': emp,
-                        'Año': data['Años'][i],
-                        'Ingresos Totales (MMD USD)': round(data['Ingresos Totales (MMD)'][i], 2),
-                        'Ingresos Netos (MMD USD)': round(data['Ingresos Netos (MMD)'][i], 2)
-                    })
-            df_final = pd.DataFrame(df_ingresos)
-            st.dataframe(df_final, use_container_width=True, hide_index=True)
+            for empresa in empresas_seleccionadas:
+                ticker = yf.Ticker(empresas_ipc[empresa])
+                
+                try:
+                    financials = ticker.financials
+                    balance = ticker.balance_sheet
+                    info = ticker.info
+                    
+                    if financials.empty or balance.empty:
+                        continue
+                        
+                    ultimos_3 = financials.columns[:3]
+                    if not años_cols:
+                        años_cols = [str(col.year) for col in ultimos_3]
+                    
+                    ingresos = financials.loc['Total Revenue', ultimos_3].values / 1e9
+                    neto = financials.loc['Net Income', ultimos_3].values / 1e9
+                    
+                    data_ingresos[empresa] = ingresos
+                    data_neto[empresa] = neto
+                    
+                    activos = balance.loc['Total Assets', balance.columns[0]]
+                    roa = (neto[0] * 1e9) / activos * 100 if activos and not pd.isna(activos) else 0
+                    
+                    capital = balance.loc['Stockholders Equity', balance.columns[0]]
+                    roe = (neto[0] * 1e9) / capital * 100 if capital and not pd.isna(capital) else 0
+                    
+                    eps = info.get('trailingEps', 0) or 0
+                    
+                    data_ratios[empresa] = {
+                        'ROA (%)': round(roa, 2),
+                        'ROE (%)': round(roe, 2),
+                        'EPS / UPA ($)': round(eps, 2)
+                    }
+                except Exception:
+                    pass
 
-        st.markdown("---")
-        st.subheader("2️⃣ Indicadores de Rentabilidad (Año más reciente)")
-        
-        # --- MOSTRAR ROA, ROE, EPS EN TABLA ---
-        if datos_ratios:
-            df_ratios = pd.DataFrame(datos_ratios).T
-            df_ratios.index.name = 'Empresa'
-            st.dataframe(df_ratios, use_container_width=True)
+            st.subheader("1️⃣ Ingresos Totales (Miles de Millones USD)")
+            if data_ingresos:
+                df_ingresos = pd.DataFrame(data_ingresos, index=años_cols).T
+                df_ingresos.index.name = 'Empresa'
+                st.dataframe(df_ingresos, use_container_width=True)
+                st.bar_chart(df_ingresos)
 
-        # --- EXPLICACIÓN FINANCIERA SENCILLA ---
-        st.markdown("---")
-        st.subheader("💡 ¿Qué significan estos números? (Guía rápida)")
-        
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            st.markdown("""
-            **🏭 ROA (Retorno sobre Activos)**
-            Mide qué tan eficiente es la empresa usando sus máquinas, edificios y recursos para ganar dinero.
-            *Ejemplo:* Un ROA del **10%** significa que por cada **$100 pesos** en activos, la empresa generó **$10 pesos** de utilidad.
-            """)
+            st.markdown("---")
+
+            st.subheader("2️⃣ Utilidad Neta (Miles de Millones USD)")
+            if data_neto:
+                df_neto = pd.DataFrame(data_neto, index=años_cols).T
+                df_neto.index.name = 'Empresa'
+                st.dataframe(df_neto, use_container_width=True)
+                st.bar_chart(df_neto)
+
+            st.markdown("---")
+
+            st.subheader("3️⃣ Indicadores de Rentabilidad (Año más reciente)")
+            if data_ratios:
+                df_ratios = pd.DataFrame(data_ratios).T
+                df_ratios.index.name = 'Empresa'
+                st.dataframe(df_ratios, use_container_width=True)
+                
+                col_chart1, col_chart2 = st.columns(2)
+                with col_chart1:
+                    st.markdown("**ROA vs ROE (%)**")
+                    st.bar_chart(df_ratios[['ROA (%)', 'ROE (%)']])
+                with col_chart2:
+                    st.markdown("**EPS / UPA ($)**")
+                    st.bar_chart(df_ratios[['EPS / UPA ($)']])
+
+            st.markdown("---")
+            st.subheader("💡 ¿Qué significan estos números? (Guía rápida)")
             
-        with col2:
-            st.markdown("""
-            **💰 ROE (Retorno sobre Capital)**
-            Mide cuánto rendimiento le está dando la empresa a los accionistas por su inversión.
-            *Ejemplo:* Un ROE del **15%** significa que por cada **$100 pesos** que invertiste, la empresa te generó **$15 pesos** de ganancia.
-            """)
+            col1, col2, col3 = st.columns(3)
             
-        with col3:
-            st.markdown("""
-            **📈 EPS / UPA (Utilidad por Acción)**
-            Es la porción de la utilidad neta que le "toca" a cada acción individual.
-            *Ejemplo:* Un EPS de **$2.50** significa que cada acción de la empresa generó **$2.50 pesos** de utilidad neta.
-            """)
+            with col1:
+                st.markdown("""
+                **🏭 ROA (Retorno sobre Activos)**
+                Mide qué tan eficiente es la empresa usando sus máquinas, edificios y recursos para ganar dinero.
+                *Ejemplo:* Un ROA del **10%** significa que por cada **$100 pesos** en activos, la empresa generó **$10 pesos** de utilidad.
+                """)
+                
+            with col2:
+                st.markdown("""
+                **💰 ROE (Retorno sobre Capital)**
+                Mide cuánto rendimiento le está dando la empresa a los accionistas por su inversión.
+                *Ejemplo:* Un ROE del **15%** significa que por cada **$100 pesos** que invertiste, la empresa te generó **$15 pesos** de ganancia.
+                """)
+                
+            with col3:
+                st.markdown("""
+                **📈 EPS / UPA (Utilidad por Acción)**
+                Es la porción de la utilidad neta que le "toca" a cada acción individual.
+                *Ejemplo:* Un EPS de **$2.50** significa que cada acción de la empresa generó **$2.50 pesos** de utilidad neta.
+                """)
 
     else:
         st.info("👈 Por favor, selecciona al menos una empresa en el menú de arriba para ver los datos.")
